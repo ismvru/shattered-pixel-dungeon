@@ -3,7 +3,7 @@
  * Copyright (C) 2012-2015 Oleg Dolya
  *
  * Shattered Pixel Dungeon
- * Copyright (C) 2014-2023 Evan Debenham
+ * Copyright (C) 2014-2024 Evan Debenham
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -279,10 +279,9 @@ public class TitleScene extends PixelScene {
 		public void update() {
 			super.update();
 
-			if (!updateShown && (Updates.updateAvailable() || Updates.isInstallable())){
+			if (!updateShown && Updates.updateAvailable()){
 				updateShown = true;
-				if (Updates.isInstallable())    text(Messages.get(TitleScene.class, "install"));
-				else                            text(Messages.get(TitleScene.class, "update"));
+				text(Messages.get(TitleScene.class, "update"));
 			}
 
 			if (updateShown){
@@ -292,10 +291,7 @@ public class TitleScene extends PixelScene {
 
 		@Override
 		protected void onClick() {
-			if (Updates.isInstallable()){
-				Updates.launchInstall();
-
-			} else if (Updates.updateAvailable()){
+			if (Updates.updateAvailable()){
 				AvailableUpdateData update = Updates.updateData();
 
 				ShatteredPixelDungeon.scene().addToFront( new WndOptions(
