@@ -3,7 +3,7 @@
  * Copyright (C) 2012-2015 Oleg Dolya
  *
  * Shattered Pixel Dungeon
- * Copyright (C) 2014-2023 Evan Debenham
+ * Copyright (C) 2014-2024 Evan Debenham
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -95,24 +95,25 @@ abstract public class Weapon extends KindOfWeapon {
 			return dly * delayFactor;
 		}
 	}
-	
+
 	public Augment augment = Augment.NONE;
-	
+
 	private static final int USES_TO_ID = 20;
 	private float usesLeftToID = USES_TO_ID;
 	private float availableUsesToID = USES_TO_ID/2f;
-	
+
 	public Enchantment enchantment;
+	public boolean enchantHardened = false;
 	public boolean curseInfusionBonus = false;
 	public boolean masteryPotionBonus = false;
-	
+
 	@Override
 	public int proc( Char attacker, Char defender, int damage ) {
-		
+
 		if (enchantment != null && attacker.buff(MagicImmune.class) == null) {
 			damage = enchantment.proc( this, attacker, defender, damage );
 		}
-		
+
 		if (!levelKnown && attacker == Dungeon.hero) {
 			float uses = Math.min( availableUsesToID, Talent.itemIDSpeedFactor(Dungeon.hero, this) );
 			availableUsesToID -= uses;
@@ -126,7 +127,7 @@ abstract public class Weapon extends KindOfWeapon {
 
 		return damage;
 	}
-	
+
 	public void onHeroGainExp( float levelPercent, Hero hero ){
 		levelPercent *= Talent.itemIDSpeedFactor(hero, this);
 		if (!levelKnown && isEquipped(hero) && availableUsesToID <= USES_TO_ID/2f) {
@@ -134,10 +135,11 @@ abstract public class Weapon extends KindOfWeapon {
 			availableUsesToID = Math.min(USES_TO_ID/2f, availableUsesToID + levelPercent * USES_TO_ID);
 		}
 	}
-	
+
 	private static final String USES_LEFT_TO_ID = "uses_left_to_id";
 	private static final String AVAILABLE_USES  = "available_uses";
 	private static final String ENCHANTMENT	    = "enchantment";
+	private static final String ENCHANT_HARDENED = "enchant_hardened";
 	private static final String CURSE_INFUSION_BONUS = "curse_infusion_bonus";
 	private static final String MASTERY_POTION_BONUS = "mastery_potion_bonus";
 	private static final String AUGMENT	        = "augment";
@@ -148,35 +150,37 @@ abstract public class Weapon extends KindOfWeapon {
 		bundle.put( USES_LEFT_TO_ID, usesLeftToID );
 		bundle.put( AVAILABLE_USES, availableUsesToID );
 		bundle.put( ENCHANTMENT, enchantment );
+		bundle.put( ENCHANT_HARDENED, enchantHardened );
 		bundle.put( CURSE_INFUSION_BONUS, curseInfusionBonus );
 		bundle.put( MASTERY_POTION_BONUS, masteryPotionBonus );
 		bundle.put( AUGMENT, augment );
 	}
-	
+
 	@Override
 	public void restoreFromBundle( Bundle bundle ) {
 		super.restoreFromBundle( bundle );
 		usesLeftToID = bundle.getFloat( USES_LEFT_TO_ID );
 		availableUsesToID = bundle.getFloat( AVAILABLE_USES );
 		enchantment = (Enchantment)bundle.get( ENCHANTMENT );
+		enchantHardened = bundle.getBoolean( ENCHANT_HARDENED );
 		curseInfusionBonus = bundle.getBoolean( CURSE_INFUSION_BONUS );
 		masteryPotionBonus = bundle.getBoolean( MASTERY_POTION_BONUS );
 
 		augment = bundle.getEnum(AUGMENT, Augment.class);
 	}
-	
+
 	@Override
 	public void reset() {
 		super.reset();
 		usesLeftToID = USES_TO_ID;
 		availableUsesToID = USES_TO_ID/2f;
 	}
-	
+
 	@Override
 	public float accuracyFactor(Char owner, Char target) {
-		
+
 		int encumbrance = 0;
-		
+
 		if( owner instanceof Hero ){
 			encumbrance = STRReq() - ((Hero)owner).STR();
 		}
@@ -189,7 +193,7 @@ abstract public class Weapon extends KindOfWeapon {
 
 		return encumbrance > 0 ? (float)(ACC / Math.pow( 1.5, encumbrance )) : ACC;
 	}
-	
+
 	@Override
 	public float delayFactor( Char owner ) {
 		return baseDelay(owner) * (1f/speedMultiplier(owner));
@@ -256,34 +260,41 @@ abstract public class Weapon extends KindOfWeapon {
 		if (curseInfusionBonus) level += 1 + level/6;
 		return level;
 	}
-	
+
 	@Override
 	public Item upgrade() {
 		return upgrade(false);
 	}
-	
+
 	public Item upgrade(boolean enchant ) {
 
 		if (enchant){
 			if (enchantment == null){
 				enchant(Enchantment.random());
 			}
-		} else {
-			if (hasCurseEnchant()){
+		} else if (enchantment != null) {
+			//chance to lose harden buff is 10/20/40/80/100% when upgrading from +6/7/8/9/10
+			if (enchantHardened){
+				if (level() >= 6 && Random.Float(10) < Math.pow(2, level()-6)){
+					enchantHardened = false;
+				}
+
+			//chance to remove curse is a static 33%
+			} else if (hasCurseEnchant()) {
 				if (Random.Int(3) == 0) enchant(null);
 			}
 		}
-		
+
 		cursed = false;
 
 		return super.upgrade();
 	}
-	
+
 	@Override
 	public String name() {
 		return enchantment != null && (cursedKnown || !enchantment.curse()) ? enchantment.name( super.name() ) : super.name();
 	}
-	
+
 	@Override
 	public Item random() {
 		//+0: 75% (3/4)
@@ -297,7 +308,7 @@ abstract public class Weapon extends KindOfWeapon {
 			}
 		}
 		level(n);
-		
+
 		//30% chance to be cursed
 		//10% chance to be enchanted
 		float effectRoll = Random.Float();
@@ -310,7 +321,7 @@ abstract public class Weapon extends KindOfWeapon {
 
 		return this;
 	}
-	
+
 	public Weapon enchant( Enchantment ench ) {
 		if (ench == null || !ench.curse()) curseInfusionBonus = false;
 		enchantment = ench;
@@ -329,7 +340,7 @@ abstract public class Weapon extends KindOfWeapon {
 	public boolean hasEnchant(Class<?extends Enchantment> type, Char owner) {
 		return enchantment != null && enchantment.getClass() == type && owner.buff(MagicImmune.class) == null;
 	}
-	
+
 	//these are not used to process specific enchant effects, so magic immune doesn't affect them
 	public boolean hasGoodEnchant(){
 		return enchantment != null && !enchantment.curse();
@@ -345,29 +356,29 @@ abstract public class Weapon extends KindOfWeapon {
 	}
 
 	public static abstract class Enchantment implements Bundlable {
-		
-		private static final Class<?>[] common = new Class<?>[]{
+
+		public static final Class<?>[] common = new Class<?>[]{
 				Blazing.class, Chilling.class, Kinetic.class, Shocking.class};
-		
-		private static final Class<?>[] uncommon = new Class<?>[]{
+
+		public static final Class<?>[] uncommon = new Class<?>[]{
 				Blocking.class, Blooming.class, Elastic.class,
 				Lucky.class, Projecting.class, Unstable.class};
-		
-		private static final Class<?>[] rare = new Class<?>[]{
+
+		public static final Class<?>[] rare = new Class<?>[]{
 				Corrupting.class, Grim.class, Vampiric.class};
-		
-		private static final float[] typeChances = new float[]{
+
+		public static final float[] typeChances = new float[]{
 				50, //12.5% each
 				40, //6.67% each
 				10  //3.33% each
 		};
-		
+
 		private static final Class<?>[] curses = new Class<?>[]{
 				Annoying.class, Displacing.class, Dazzling.class, Explosive.class,
 				Sacrificial.class, Wayward.class, Polarized.class, Friendly.class
 		};
-		
-			
+
+
 		public abstract int proc( Weapon weapon, Char attacker, Char defender, int damage );
 
 		protected float procChanceMultiplier( Char attacker ){
@@ -429,9 +440,9 @@ abstract public class Weapon extends KindOfWeapon {
 		@Override
 		public void storeInBundle( Bundle bundle ) {
 		}
-		
+
 		public abstract ItemSprite.Glowing glowing();
-		
+
 		@SuppressWarnings("unchecked")
 		public static Enchantment random( Class<? extends Enchantment> ... toIgnore ) {
 			switch(Random.chances(typeChances)){
@@ -443,7 +454,7 @@ abstract public class Weapon extends KindOfWeapon {
 					return randomRare( toIgnore );
 			}
 		}
-		
+
 		@SuppressWarnings("unchecked")
 		public static Enchantment randomCommon( Class<? extends Enchantment> ... toIgnore ) {
 			ArrayList<Class<?>> enchants = new ArrayList<>(Arrays.asList(common));
@@ -454,7 +465,7 @@ abstract public class Weapon extends KindOfWeapon {
 				return (Enchantment) Reflection.newInstance(Random.element(enchants));
 			}
 		}
-		
+
 		@SuppressWarnings("unchecked")
 		public static Enchantment randomUncommon( Class<? extends Enchantment> ... toIgnore ) {
 			ArrayList<Class<?>> enchants = new ArrayList<>(Arrays.asList(uncommon));
@@ -465,7 +476,7 @@ abstract public class Weapon extends KindOfWeapon {
 				return (Enchantment) Reflection.newInstance(Random.element(enchants));
 			}
 		}
-		
+
 		@SuppressWarnings("unchecked")
 		public static Enchantment randomRare( Class<? extends Enchantment> ... toIgnore ) {
 			ArrayList<Class<?>> enchants = new ArrayList<>(Arrays.asList(rare));
@@ -487,6 +498,6 @@ abstract public class Weapon extends KindOfWeapon {
 				return (Enchantment) Reflection.newInstance(Random.element(enchants));
 			}
 		}
-		
+
 	}
 }
